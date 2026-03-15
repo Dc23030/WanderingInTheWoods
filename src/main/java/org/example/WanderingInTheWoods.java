@@ -7,6 +7,7 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.TextInputDialog;
@@ -79,6 +80,18 @@ public class WanderingInTheWoods extends Application {
 
     // Main window reference
     Stage primaryStage;
+
+    // Movement mode
+    boolean useRandomMovement = true;
+    int systematicStep = 0;
+
+    // Simulation control for case 3
+    int totalSimulations = 1;
+    int currentSimulation = 1;
+
+    // Stores results from all simulations
+    int[] simulationResults;
+    int totalStepsAcrossRuns = 0;
 
     @Override
     public void start(Stage stage) {
@@ -162,6 +175,47 @@ public class WanderingInTheWoods extends Application {
         return runByLevel(level);
     }
 
+    // Popup for movement type, only used in case 3
+    public boolean showMovementSelection() {
+        ChoiceDialog<String> dialog = new ChoiceDialog<>(
+                "Random",
+                Arrays.asList("Random", "Systematic")
+        );
+
+        dialog.setTitle("Movement Type");
+        dialog.setHeaderText("Choose Movement Style");
+        dialog.setContentText("Select movement:");
+
+        Optional<String> result = dialog.showAndWait();
+        if (result.isEmpty()) {
+            return false;
+        }
+
+        useRandomMovement = result.get().equalsIgnoreCase("Random");
+        systematicStep = 0;
+        return true;
+    }
+
+    // Ask user how many simulations to run, only used in case 3
+    public boolean askSimulationCount() {
+        Integer simCount = askForInteger(
+                "Simulations",
+                "Grades 6-8 Settings",
+                "How many simulations should run?",
+                10
+        );
+
+        if (simCount == null) {
+            return false;
+        }
+
+        totalSimulations = Math.max(1, simCount);
+        currentSimulation = 1;
+        simulationResults = new int[totalSimulations];
+        totalStepsAcrossRuns = 0;
+        return true;
+    }
+
     // Applies settings based on grade level
     public boolean runByLevel(int level) {
         switch (level) {
@@ -169,6 +223,11 @@ public class WanderingInTheWoods extends Application {
                 rows = 5;
                 cols = 5;
                 players = 2;
+                useRandomMovement = true;
+                totalSimulations = 1;
+                currentSimulation = 1;
+                simulationResults = new int[1];
+                totalStepsAcrossRuns = 0;
                 return true;
 
             case 2:
@@ -191,6 +250,11 @@ public class WanderingInTheWoods extends Application {
                 rows = gridSize;
                 cols = gridSize;
                 players = clampPlayers(playerCount2);
+                useRandomMovement = true;
+                totalSimulations = 1;
+                currentSimulation = 1;
+                simulationResults = new int[1];
+                totalStepsAcrossRuns = 0;
                 return true;
 
             case 3:
@@ -221,12 +285,28 @@ public class WanderingInTheWoods extends Application {
                 rows = Math.max(2, rowCount);
                 cols = Math.max(2, colCount);
                 players = clampPlayers(playerCount3);
+
+                // Only Grades 6-8 gets movement selection
+                if (!showMovementSelection()) {
+                    return false;
+                }
+
+                // Only Grades 6-8 gets simulation count
+                if (!askSimulationCount()) {
+                    return false;
+                }
+
                 return true;
 
             default:
                 rows = 5;
                 cols = 5;
                 players = 2;
+                useRandomMovement = true;
+                totalSimulations = 1;
+                currentSimulation = 1;
+                simulationResults = new int[1];
+                totalStepsAcrossRuns = 0;
                 return true;
         }
     }
@@ -271,6 +351,15 @@ public class WanderingInTheWoods extends Application {
         }
 
         steps = 0;
+        systematicStep = 0;
+
+        if (totalSimulations < 1) {
+            totalSimulations = 1;
+        }
+
+        if (simulationResults == null || simulationResults.length != totalSimulations) {
+            simulationResults = new int[totalSimulations];
+        }
     }
 
     // Draws the grid background
@@ -326,11 +415,33 @@ public class WanderingInTheWoods extends Application {
     public void simulationStep() {
         if (allInOneGroup()) {
             timeline.stop();
+
             if (meetSound != null) {
                 meetSound.play();
             }
-            deleteSave();
-            resetGame();
+
+            // Save this simulation's result
+            if (simulationResults != null && currentSimulation - 1 < simulationResults.length) {
+                simulationResults[currentSimulation - 1] = steps;
+                totalStepsAcrossRuns += steps;
+            }
+
+            Platform.runLater(() -> {
+                showCompletionMessage();
+
+                if (currentSimulation < totalSimulations) {
+                    currentSimulation++;
+                    initializeNewGame();
+                    drawGrid();
+                    initializePlayers();
+                    timeline.play();
+                } else {
+                    showFinalStatistics();
+                    deleteSave();
+                    resetGame();
+                }
+            });
+
             return;
         }
 
@@ -338,7 +449,7 @@ public class WanderingInTheWoods extends Application {
 
         for (int i = 0; i < players; i++) {
             if (!movedGroups.contains(group[i])) {
-                moveGroupRandom(group[i]);
+                moveGroup(group[i]);
                 movedGroups.add(group[i]);
             }
         }
@@ -348,14 +459,24 @@ public class WanderingInTheWoods extends Application {
         steps++;
     }
 
-    // Moves all players in the same group together
-    public void moveGroupRandom(int groupID) {
-        int move = rand.nextInt(4);
+    // Moves all players in the same group using chosen movement mode
+    public void moveGroup(int groupID) {
+        int move;
+
+        if (useRandomMovement) {
+            move = rand.nextInt(4);
+        } else {
+            move = systematicStep % 4;
+        }
 
         for (int i = 0; i < players; i++) {
             if (group[i] == groupID) {
                 moveByDirection(positions[i], move);
             }
+        }
+
+        if (!useRandomMovement) {
+            systematicStep++;
         }
     }
 
@@ -432,6 +553,52 @@ public class WanderingInTheWoods extends Application {
         }
     }
 
+    // Shows popup for each completed simulation
+    public void showCompletionMessage() {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Simulation Complete");
+        alert.setHeaderText("Simulation " + currentSimulation + " finished");
+        alert.setContentText("It took " + steps + " steps for all circles to meet.");
+        alert.showAndWait();
+    }
+
+    // Shows final statistics after all simulations are done
+    public void showFinalStatistics() {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Final Simulation Statistics");
+        alert.setHeaderText("All simulations are complete.");
+
+        StringBuilder stats = new StringBuilder();
+        int minSteps = simulationResults[0];
+        int maxSteps = simulationResults[0];
+
+        for (int i = 0; i < simulationResults.length; i++) {
+            stats.append("Simulation ")
+                    .append(i + 1)
+                    .append(": ")
+                    .append(simulationResults[i])
+                    .append(" steps\n");
+
+            if (simulationResults[i] < minSteps) {
+                minSteps = simulationResults[i];
+            }
+
+            if (simulationResults[i] > maxSteps) {
+                maxSteps = simulationResults[i];
+            }
+        }
+
+        double averageSteps = (double) totalStepsAcrossRuns / totalSimulations;
+
+        stats.append("\nTotal simulations: ").append(totalSimulations);
+        stats.append("\nAverage steps: ").append(String.format("%.2f", averageSteps));
+        stats.append("\nMinimum steps: ").append(minSteps);
+        stats.append("\nMaximum steps: ").append(maxSteps);
+
+        alert.setContentText(stats.toString());
+        alert.showAndWait();
+    }
+
     // Saves current game state
     public void saveGame() {
         try {
@@ -442,6 +609,12 @@ public class WanderingInTheWoods extends Application {
             out.writeInt(cols);
             out.writeInt(players);
             out.writeInt(steps);
+            out.writeBoolean(useRandomMovement);
+            out.writeInt(systematicStep);
+            out.writeInt(totalSimulations);
+            out.writeInt(currentSimulation);
+            out.writeObject(simulationResults);
+            out.writeInt(totalStepsAcrossRuns);
             out.close();
         } catch (Exception e) {
             e.printStackTrace();
@@ -462,6 +635,12 @@ public class WanderingInTheWoods extends Application {
             cols = in.readInt();
             players = in.readInt();
             steps = in.readInt();
+            useRandomMovement = in.readBoolean();
+            systematicStep = in.readInt();
+            totalSimulations = in.readInt();
+            currentSimulation = in.readInt();
+            simulationResults = (int[]) in.readObject();
+            totalStepsAcrossRuns = in.readInt();
             in.close();
             return true;
         } catch (Exception e) {
@@ -497,8 +676,4 @@ public class WanderingInTheWoods extends Application {
     public static void main(String[] args) {
         launch();
     }
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> bc2fc8c35aabbaa255219ddc383cb199eeb90df7
