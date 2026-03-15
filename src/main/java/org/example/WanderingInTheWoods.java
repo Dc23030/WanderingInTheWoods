@@ -429,7 +429,9 @@ public class WanderingInTheWoods extends Application {
     }
 
     public void moveGroup(int groupID) {
+
         if (useRandomMovement) {
+
             int move = rand.nextInt(4);
 
             for (int i = 0; i < players; i++) {
@@ -437,62 +439,47 @@ public class WanderingInTheWoods extends Application {
                     moveByDirection(positions[i], move);
                 }
             }
+
         } else {
+
             moveGroupSystematicScan(groupID);
+
         }
     }
 
     public void moveGroupSystematicScan(int groupID) {
-        int direction = scanDirections[groupID];
-        boolean movingDown = scanMovingDown[groupID];
-
-        boolean moved = false;
 
         for (int i = 0; i < players; i++) {
-            if (group[i] == groupID) {
-                int[] pos = positions[i];
 
-                if (direction == 1 && pos[1] < cols - 1) {
-                    pos[1]++;
-                    moved = true;
-                } else if (direction == -1 && pos[1] > 0) {
-                    pos[1]--;
-                    moved = true;
+            if (group[i] != groupID) continue;
+
+            int r = positions[i][0];
+            int c = positions[i][1];
+
+            // EVEN rows move RIGHT
+            if (r % 2 == 0) {
+
+                if (c < cols - 1) {
+                    positions[i][1]++; // move right
                 }
+                else if (r < rows - 1) {
+                    positions[i][0]++; // move down
+                }
+
+            }
+
+            // ODD rows move LEFT
+            else {
+
+                if (c > 0) {
+                    positions[i][1]--; // move left
+                }
+                else if (r < rows - 1) {
+                    positions[i][0]++; // move down
+                }
+
             }
         }
-
-        if (moved) {
-            return;
-        }
-
-        boolean rowChanged = false;
-
-        for (int i = 0; i < players; i++) {
-            if (group[i] == groupID) {
-                int[] pos = positions[i];
-
-                if (movingDown) {
-                    if (pos[0] < rows - 1) {
-                        pos[0]++;
-                        rowChanged = true;
-                    }
-                } else {
-                    if (pos[0] > 0) {
-                        pos[0]--;
-                        rowChanged = true;
-                    }
-                }
-            }
-        }
-
-        if (rowChanged) {
-            scanDirections[groupID] *= -1;
-            return;
-        }
-
-        scanMovingDown[groupID] = !scanMovingDown[groupID];
-        scanDirections[groupID] *= -1;
     }
 
     public void moveByDirection(int[] pos, int move) {
