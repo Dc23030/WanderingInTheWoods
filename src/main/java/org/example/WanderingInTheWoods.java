@@ -43,53 +43,38 @@ import java.util.Set;
 
 public class WanderingInTheWoods extends Application {
 
-    // Random movement generator
     private static final Random rand = new Random();
 
-    // Default grid and player settings
     int rows = 5;
     int cols = 5;
     int players = 2;
 
-    // Stores player row/column positions
     int[][] positions;
-
-    // Stores player groups after meetings
     int[] group;
+    int[] groupDirections;
 
-    // Visual player circles
+    // Snake scan state for systematic mode
+    int[] scanDirections; // 1 = right, -1 = left
+    boolean[] scanMovingDown; // true = down, false = up
+
     Circle[] playerIcons;
 
-    // Main game display area
     Pane gamePane = new Pane();
-
-    // Timer that drives simulation steps
     Timeline timeline;
-
-    // Sound played when all players meet
     AudioClip meetSound;
 
-    // Size of each grid square
     int cellSize = 60;
-
-    // Number of movement steps taken
     int steps = 0;
 
-    // Save file for interrupted games
     File saveFile = new File("save.dat");
-
-    // Main window reference
     Stage primaryStage;
 
-    // Movement mode
     boolean useRandomMovement = true;
     int systematicStep = 0;
 
-    // Simulation control for case 3
     int totalSimulations = 1;
     int currentSimulation = 1;
 
-    // Stores results from all simulations
     int[] simulationResults;
     int totalStepsAcrossRuns = 0;
 
@@ -97,10 +82,8 @@ public class WanderingInTheWoods extends Application {
     public void start(Stage stage) {
         primaryStage = stage;
 
-        // Attempt to load saved game first
         boolean loaded = loadGame();
 
-        // If no save exists, ask user for a new game setup
         if (!loaded) {
             if (!showGradeSelection()) {
                 Platform.exit();
@@ -109,18 +92,15 @@ public class WanderingInTheWoods extends Application {
             initializeNewGame();
         }
 
-        // Draw board and players
         drawGrid();
         initializePlayers();
         loadSound();
 
-        // Main simulation timer
         timeline = new Timeline(
                 new KeyFrame(Duration.seconds(1), e -> simulationStep())
         );
         timeline.setCycleCount(Timeline.INDEFINITE);
 
-        // Buttons for control
         Button startBtn = new Button("Start");
         Button stopBtn = new Button("Stop");
         Button resetBtn = new Button("Reset");
@@ -129,7 +109,6 @@ public class WanderingInTheWoods extends Application {
         stopBtn.setOnAction(e -> timeline.pause());
         resetBtn.setOnAction(e -> resetGame());
 
-        // Bottom controls
         HBox controls = new HBox(10, startBtn, stopBtn, resetBtn);
         controls.setAlignment(Pos.CENTER);
 
@@ -143,11 +122,9 @@ public class WanderingInTheWoods extends Application {
         stage.setScene(scene);
         stage.show();
 
-        // Save game if window closes before completion
         stage.setOnCloseRequest(e -> saveGame());
     }
 
-    // Shows grade selection and applies chosen settings
     public boolean showGradeSelection() {
         ChoiceDialog<String> dialog = new ChoiceDialog<>(
                 "1 - K-2",
@@ -175,7 +152,6 @@ public class WanderingInTheWoods extends Application {
         return runByLevel(level);
     }
 
-    // Popup for movement type, only used in case 3
     public boolean showMovementSelection() {
         ChoiceDialog<String> dialog = new ChoiceDialog<>(
                 "Random",
@@ -196,7 +172,6 @@ public class WanderingInTheWoods extends Application {
         return true;
     }
 
-    // Ask user how many simulations to run, only used in case 3
     public boolean askSimulationCount() {
         Integer simCount = askForInteger(
                 "Simulations",
@@ -216,7 +191,6 @@ public class WanderingInTheWoods extends Application {
         return true;
     }
 
-    // Applies settings based on grade level
     public boolean runByLevel(int level) {
         switch (level) {
             case 1:
@@ -286,12 +260,10 @@ public class WanderingInTheWoods extends Application {
                 cols = Math.max(2, colCount);
                 players = clampPlayers(playerCount3);
 
-                // Only Grades 6-8 gets movement selection
                 if (!showMovementSelection()) {
                     return false;
                 }
 
-                // Only Grades 6-8 gets simulation count
                 if (!askSimulationCount()) {
                     return false;
                 }
@@ -311,7 +283,6 @@ public class WanderingInTheWoods extends Application {
         }
     }
 
-    // Reusable number input dialog
     public Integer askForInteger(String title, String header, String prompt, int defaultValue) {
         while (true) {
             TextInputDialog dialog = new TextInputDialog(String.valueOf(defaultValue));
@@ -327,27 +298,30 @@ public class WanderingInTheWoods extends Application {
             try {
                 return Integer.parseInt(result.get().trim());
             } catch (NumberFormatException e) {
-                // Loop again until valid input is entered
             }
         }
     }
 
-    // Keeps player count between 2 and 4
     public int clampPlayers(int value) {
         if (value < 2) return 2;
         if (value > 4) return 4;
         return value;
     }
 
-    // Creates a new random game state
     public void initializeNewGame() {
         positions = new int[players][2];
         group = new int[players];
+        groupDirections = new int[players];
+        scanDirections = new int[players];
+        scanMovingDown = new boolean[players];
 
         for (int i = 0; i < players; i++) {
             positions[i][0] = rand.nextInt(rows);
             positions[i][1] = rand.nextInt(cols);
             group[i] = i;
+
+            scanDirections[i] = (i % 2 == 0) ? 1 : -1;
+            scanMovingDown[i] = true;
         }
 
         steps = 0;
@@ -362,7 +336,6 @@ public class WanderingInTheWoods extends Application {
         }
     }
 
-    // Draws the grid background
     public void drawGrid() {
         gamePane.getChildren().clear();
         gamePane.setPrefSize(cols * cellSize, rows * cellSize);
@@ -379,7 +352,6 @@ public class WanderingInTheWoods extends Application {
         }
     }
 
-    // Places visual circles on the board
     public void initializePlayers() {
         playerIcons = new Circle[players];
         Color[] colors = {Color.RED, Color.BLUE, Color.YELLOW, Color.PURPLE};
@@ -399,7 +371,6 @@ public class WanderingInTheWoods extends Application {
         }
     }
 
-    // Loads sound safely
     public void loadSound() {
         try {
             var soundUrl = getClass().getResource("/meet.wav");
@@ -411,7 +382,6 @@ public class WanderingInTheWoods extends Application {
         }
     }
 
-    // Runs one simulation step
     public void simulationStep() {
         if (allInOneGroup()) {
             timeline.stop();
@@ -420,7 +390,6 @@ public class WanderingInTheWoods extends Application {
                 meetSound.play();
             }
 
-            // Save this simulation's result
             if (simulationResults != null && currentSimulation - 1 < simulationResults.length) {
                 simulationResults[currentSimulation - 1] = steps;
                 totalStepsAcrossRuns += steps;
@@ -459,28 +428,73 @@ public class WanderingInTheWoods extends Application {
         steps++;
     }
 
-    // Moves all players in the same group using chosen movement mode
     public void moveGroup(int groupID) {
-        int move;
-
         if (useRandomMovement) {
-            move = rand.nextInt(4);
-        } else {
-            move = systematicStep % 4;
-        }
+            int move = rand.nextInt(4);
 
-        for (int i = 0; i < players; i++) {
-            if (group[i] == groupID) {
-                moveByDirection(positions[i], move);
+            for (int i = 0; i < players; i++) {
+                if (group[i] == groupID) {
+                    moveByDirection(positions[i], move);
+                }
             }
-        }
-
-        if (!useRandomMovement) {
-            systematicStep++;
+        } else {
+            moveGroupSystematicScan(groupID);
         }
     }
 
-    // Moves one player by one grid square
+    public void moveGroupSystematicScan(int groupID) {
+        int direction = scanDirections[groupID];
+        boolean movingDown = scanMovingDown[groupID];
+
+        boolean moved = false;
+
+        for (int i = 0; i < players; i++) {
+            if (group[i] == groupID) {
+                int[] pos = positions[i];
+
+                if (direction == 1 && pos[1] < cols - 1) {
+                    pos[1]++;
+                    moved = true;
+                } else if (direction == -1 && pos[1] > 0) {
+                    pos[1]--;
+                    moved = true;
+                }
+            }
+        }
+
+        if (moved) {
+            return;
+        }
+
+        boolean rowChanged = false;
+
+        for (int i = 0; i < players; i++) {
+            if (group[i] == groupID) {
+                int[] pos = positions[i];
+
+                if (movingDown) {
+                    if (pos[0] < rows - 1) {
+                        pos[0]++;
+                        rowChanged = true;
+                    }
+                } else {
+                    if (pos[0] > 0) {
+                        pos[0]--;
+                        rowChanged = true;
+                    }
+                }
+            }
+        }
+
+        if (rowChanged) {
+            scanDirections[groupID] *= -1;
+            return;
+        }
+
+        scanMovingDown[groupID] = !scanMovingDown[groupID];
+        scanDirections[groupID] *= -1;
+    }
+
     public void moveByDirection(int[] pos, int move) {
         switch (move) {
             case 0:
@@ -500,7 +514,6 @@ public class WanderingInTheWoods extends Application {
         }
     }
 
-    // Detects meetings between players
     public void checkForMeetings() {
         for (int i = 0; i < players; i++) {
             for (int j = i + 1; j < players; j++) {
@@ -512,7 +525,6 @@ public class WanderingInTheWoods extends Application {
         }
     }
 
-    // Merges two player groups
     public void mergeGroups(int g1, int g2) {
         int newGroup = Math.min(g1, g2);
         int oldGroup = Math.max(g1, g2);
@@ -522,9 +534,11 @@ public class WanderingInTheWoods extends Application {
                 group[i] = newGroup;
             }
         }
+
+        scanDirections[oldGroup] = scanDirections[newGroup];
+        scanMovingDown[oldGroup] = scanMovingDown[newGroup];
     }
 
-    // Checks if everyone is in the same group
     public boolean allInOneGroup() {
         int first = group[0];
 
@@ -536,7 +550,6 @@ public class WanderingInTheWoods extends Application {
         return true;
     }
 
-    // Animates players to their new grid squares
     public void updateGraphics() {
         for (int i = 0; i < players; i++) {
             double newX = positions[i][1] * cellSize + cellSize / 2.0;
@@ -553,7 +566,6 @@ public class WanderingInTheWoods extends Application {
         }
     }
 
-    // Shows popup for each completed simulation
     public void showCompletionMessage() {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Simulation Complete");
@@ -562,7 +574,6 @@ public class WanderingInTheWoods extends Application {
         alert.showAndWait();
     }
 
-    // Shows final statistics after all simulations are done
     public void showFinalStatistics() {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Final Simulation Statistics");
@@ -599,12 +610,14 @@ public class WanderingInTheWoods extends Application {
         alert.showAndWait();
     }
 
-    // Saves current game state
     public void saveGame() {
         try {
             ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(saveFile));
             out.writeObject(positions);
             out.writeObject(group);
+            out.writeObject(groupDirections);
+            out.writeObject(scanDirections);
+            out.writeObject(scanMovingDown);
             out.writeInt(rows);
             out.writeInt(cols);
             out.writeInt(players);
@@ -621,7 +634,6 @@ public class WanderingInTheWoods extends Application {
         }
     }
 
-    // Loads saved game state
     public boolean loadGame() {
         if (!saveFile.exists()) {
             return false;
@@ -631,6 +643,9 @@ public class WanderingInTheWoods extends Application {
             ObjectInputStream in = new ObjectInputStream(new FileInputStream(saveFile));
             positions = (int[][]) in.readObject();
             group = (int[]) in.readObject();
+            groupDirections = (int[]) in.readObject();
+            scanDirections = (int[]) in.readObject();
+            scanMovingDown = (boolean[]) in.readObject();
             rows = in.readInt();
             cols = in.readInt();
             players = in.readInt();
@@ -648,14 +663,12 @@ public class WanderingInTheWoods extends Application {
         }
     }
 
-    // Deletes save file
     public void deleteSave() {
         if (saveFile.exists()) {
             saveFile.delete();
         }
     }
 
-    // Resets the game back to grade selection
     public void resetGame() {
         if (timeline != null) {
             timeline.stop();
