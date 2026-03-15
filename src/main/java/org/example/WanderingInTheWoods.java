@@ -497,4 +497,8 @@ public class WanderingInTheWoods extends Application {
     public static void main(String[] args) {
         launch();
     }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> bc2fc8c35aabbaa255219ddc383cb199eeb90df7

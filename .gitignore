@@ -1,5 +1,9 @@
 target/
+<<<<<<< HEAD
 !file.mvn/wrapper/maven-wrapper.jar
+=======
+!.mvn/wrapper/maven-wrapper.jar
+>>>>>>> bc2fc8c35aabbaa255219ddc383cb199eeb90df7
 !**/src/main/**/target/
 !**/src/test/**/target/
 .kotlin
@@ -36,4 +40,8 @@ build/
 .vscode/
 
 ### Mac OS ###
+<<<<<<< HEAD
 .DS_Store
+=======
+.DS_Store
+>>>>>>> bc2fc8c35aabbaa255219ddc383cb199eeb90df7
