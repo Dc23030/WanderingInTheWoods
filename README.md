@@ -1,3 +1,4 @@
+## About
 This project was originally developed as part of a group project that was due at the end of our Software Engineering class at Lewis University.
 
 ## Group Mates
